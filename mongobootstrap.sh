@@ -1,48 +1,48 @@
 #!/usr/bin/env bash
 
 # Update apt
-apt-get update && apt-get dist-upgrade
+apt-get -y update && apt-get -y dist-upgrade && apt-get -y autoremove && apt-get -y clean
 
 # Install requirements
-apt-get install -y apache2 build-essential checkinstall php5 php5-cli php5-mcrypt php5-gd php-apc git sqlite php5-sqlite curl php5-curl php5-dev php-pear php5-xdebug vim-nox msmtp-mta mongodb
+apt-get install -y nginx build-essential checkinstall php5-fpm php5-cli php5-mcrypt php5-gd php-apc git sqlite php5-sqlite curl php5-curl php5-dev php-pear php5-xdebug vim-nox msmtp-mta mongodb
 sudo pecl install mongo
 
 # Setup hosts file
-VHOST=$(cat <<EOF
-    <VirtualHost *:80>
-            ServerAdmin webmaster@localhost
+VHOST=$(cat <<'EOF'
+server {
+        listen   80;
+     
 
-            DocumentRoot /var/www/webapp/
-            Alias /webgrind /var/www/webgrind
-            <Directory />
-                    Options FollowSymLinks
-                    AllowOverride All
-            </Directory>
-            <Directory /var/www/webapp/>
-                    Options Indexes FollowSymLinks MultiViews
-                    AllowOverride All
-                    Order allow,deny
-                    allow from all
-            </Directory>
-            DirectoryIndex index.php
-            ScriptAlias /cgi-bin/ /usr/lib/cgi-bin/
-            <Directory "/usr/lib/cgi-bin">
-                    AllowOverride None
-                    Options +ExecCGI -MultiViews +SymLinksIfOwnerMatch
-                    Order allow,deny
-                    Allow from all
-            </Directory>
-            Alias /xhprof "/usr/share/php/xhprof_html"
-            <Directory "/usr/share/php/xhprof_html">
-                Options FollowSymLinks
-                AllowOverride All
-                Order allow,deny
-                allow from all
-            </Directory>
-    </VirtualHost>
+        root /var/www/webapp;
+        index index.php index.html index.htm;
+
+        server_name example.com;
+
+        location / {
+                try_files $uri $uri/ /index.html;
+        }
+
+        error_page 404 /404.html;
+
+        error_page 500 502 503 504 /50x.html;
+        location = /50x.html {
+              root /var/www/webapp;
+        }
+
+        # pass the PHP scripts to FastCGI server listening on /var/run/php5-fpm.sock
+        location ~ \.php$ {
+                try_files $uri =404;
+                fastcgi_pass unix:/var/run/php5-fpm.sock;
+                fastcgi_index index.php;
+                fastcgi_param SCRIPT_FILENAME $document_root$fastcgi_script_name;
+                include fastcgi_params;
+                
+        }
+
+}
 EOF
 )
-echo "${VHOST}" > /etc/apache2/sites-available/default
+echo "${VHOST}" > /etc/nginx/sites-available/default
 
 # Configure XDebug
 XDEBUG=$(cat <<EOF
@@ -50,16 +50,9 @@ zend_extension=/usr/lib/php5/20100525/xdebug.so
 xdebug.profiler_enable=1
 xdebug.profiler_output_dir="/tmp"
 xdebug.profiler_append=0
-xdebug.profiler_output_name = "cachegrind.out.%t.%p"
 EOF
 )
 echo "${XDEBUG}" > /etc/php5/conf.d/xdebug.ini
-
-# Install webgrind if not already present
-if [ ! -d /var/www/webgrind ];
-then
-    git clone https://github.com/jokkedk/webgrind.git /var/www/webgrind
-fi
 
 # Configure MSMTP
 MSMTP=$(cat <<EOF
@@ -116,32 +109,20 @@ touch /var/log/msmtp.log
 chmod a+w /var/log/msmtp.log
 
 # Configure PHP to use MSMTP
-sudo sed -i "s[^;sendmail_path =.*[sendmail_path = '/usr/bin/msmtp -t'[g" /etc/php5/apache2/php.ini
+sudo sed -i "s[^;sendmail_path =.*[sendmail_path = '/usr/bin/msmtp -t'[g" /etc/php5/fpm/php.ini
 
-# Install XHProf
-CONFIG=$(cat <<EOF
-extension=xhprof.so
-xhprof.output_dir="/var/tmp/xhprof"
-EOF
-)
-echo "${CONFIG}" > /etc/php5/conf.d/xhprof.ini
-if [ ! -d /usr/share/php/xhprof_html ];
-then
-    sudo pecl install xhprof-beta
-fi
+# Fix a minor security issue
+sudo sed -i "s[^cgi.fix_pathinfo=1.*[cgi.fix_pathinfo=0[g" /etc/php5/fpm/php.ini
 
-if [ ! -d /var/tmp/xhprof ];
-then
-    sudo mkdir /var/tmp/xhprof
-    sudo chmod 777 /var/tmp/xhprof
-fi
+# Fix another issue
+sudo sed -i "s[^listen = .*[listen = /var/run/php5-fpm.sock[g" /etc/php5/fpm/pool.d/www.conf
 
 # Install Composer globally
 curl -sS https://getcomposer.org/installer | php
 sudo mv composer.phar /usr/local/bin/composer
 
-# Enable mod_rewrite
-sudo a2enmod rewrite
+# Restart Nginx
+sudo service nginx restart
 
-# Restart Apache
-sudo service apache2 restart
+# Create the database
+mysql -uroot -proot < /var/www/webapp/sql/setup.sql
