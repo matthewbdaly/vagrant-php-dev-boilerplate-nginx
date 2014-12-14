@@ -123,6 +123,3 @@ sudo mv composer.phar /usr/local/bin/composer
 
 # Restart Nginx
 sudo service nginx restart
-
-# Create the database
-mysql -uroot -proot < /var/www/webapp/sql/setup.sql
