@@ -125,8 +125,9 @@ sudo sed -i "s[^listen = .*[listen = /var/run/php5-fpm.sock[g" /etc/php5/fpm/poo
 curl -sS https://getcomposer.org/installer | php
 sudo mv composer.phar /usr/local/bin/composer
 
-# Restart Nginx
+# Restart web servers
 sudo service nginx restart
+sudo service php5-fpm restart
 
 # Create the database
 mysql -uroot -proot < /var/www/webapp/sql/setup.sql

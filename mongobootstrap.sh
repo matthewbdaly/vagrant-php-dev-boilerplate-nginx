@@ -5,7 +5,8 @@ apt-get -y update && apt-get -y dist-upgrade && apt-get -y autoremove && apt-get
 
 # Install requirements
 apt-get install -y nginx build-essential checkinstall php5-fpm php5-cli php5-mcrypt php5-gd php-apc git sqlite php5-sqlite curl php5-curl php5-dev php-pear php5-xdebug vim-nox msmtp-mta mongodb
-sudo pecl install mongo
+printf "\n" | pecl install mongo
+echo "extension=mongo.so" >> /etc/php5/fpm/php.ini
 
 # Setup hosts file
 VHOST=$(cat <<'EOF'
@@ -121,5 +122,6 @@ sudo sed -i "s[^listen = .*[listen = /var/run/php5-fpm.sock[g" /etc/php5/fpm/poo
 curl -sS https://getcomposer.org/installer | php
 sudo mv composer.phar /usr/local/bin/composer
 
-# Restart Nginx
+# Restart web servers
 sudo service nginx restart
+sudo service php5-fpm restart
