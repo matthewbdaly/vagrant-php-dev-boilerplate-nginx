@@ -23,7 +23,7 @@ server {
         server_name example.com;
 
         location / {
-                try_files $uri $uri/ /index.html;
+                try_files $uri $uri/ /index.php;
         }
 
         error_page 404 /404.html;
